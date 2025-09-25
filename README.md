@@ -1,8 +1,9 @@
-# *(README for MetaFacebookFix is WIP)*
+![](/og.jpg)
 
-![](https://maps.dstw.dev/og.jpg)
+# Meta Facebook 分享連結預覽好幫手 🙌
 
-# Google Maps 分享連結預覽好幫手 🙌
+<details>
+<summary>(README for MetaFacebookFix is WIP)</summary>
 
 一個在社群媒體和通訊軟體中分享 Google 地圖路線規劃、商家地標連結有預覽的神奇魔法！✨
 
@@ -35,3 +36,5 @@
 [點這裡閱讀](https://lab.imgb.space/demo/testing/gmaps) 在 [Tarnhelm](https://github.com/lz233/Tarnhelm) 的規則設定，即可在分享時透過選單轉換分享。
 
 <img src="https://maps.dstw.dev/assets/android-tarnhelm.gif" width="250">
+
+</details>
