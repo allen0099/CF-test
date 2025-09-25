@@ -16,6 +16,8 @@ async function generateHtmlWithMetadata(url) {
     return result;
   });
   // .replace(`"`, `&#34;`)
+  console.log(metadata);
+  const processedUrl = metadata.meta.url ?? metadata.og.url ?? url;
   let title = `${metadata.og.title} &#128588; Facebook 分享連結預覽好幫手`;
   let description = `${metadata.og.description ?? ""}${metadata.og.description != null ? " - " : ""}${metadata.og.title}`;
   let img = metadata.og.image ?? "/og.jpg";
@@ -32,7 +34,7 @@ async function generateHtmlWithMetadata(url) {
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="${url}" />
+    <meta property="og:url" content="${metadata.og.url}" />
     <meta property="og:site_name" content="${title}" />
     <meta property="og:title" content="${title}" />
     <meta property="og:description" content="${description}" />
@@ -40,7 +42,7 @@ async function generateHtmlWithMetadata(url) {
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:url" content="${url}" />
+    <meta name="twitter:url" content="${metadata.og.url}" />
     <meta name="twitter:title" content="${title}" />
     <meta name="twitter:description" content="${description}" />
     <meta name="twitter:image" content="${img}" />
@@ -50,7 +52,7 @@ async function generateHtmlWithMetadata(url) {
     <meta property="telegram_channel" content="turbolabit">
 
     <!-- Redirect to Facebook -->
-    <meta http-equiv="refresh" content="2; url = ${url}" />
+    <meta http-equiv="refresh" content="2; url = ${processedUrl}" />
 
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC&display=swap');
@@ -79,7 +81,7 @@ async function generateHtmlWithMetadata(url) {
   </head>
   <body>
     <div class="message">
-      Facebook 分享連結預覽好幫手 🙌 正在帶您前往 <a href="${url}">${url}</a>。
+      Facebook 分享連結預覽好幫手 🙌 正在帶您前往 <a href="${processedUrl}">${decodeURI(processedUrl)}</a>。
     </div>
   </body>
   </html>
@@ -90,8 +92,8 @@ async function generateHtmlWithMetadata(url) {
 router.get("/", async (ctx, next) => {
   let title = "Facebook 分享連結預覽好幫手 🙌";
   let description = "分享 Facebook 連結有預覽資訊的神奇魔法！✨";
-  let img = `https://maps.dstw.dev/og.jpg`;
-  let url = `https://maps.dstw.dev/`;
+  let img = `/og.jpg`;
+  let url = `/`;
   let html = `
   <!DOCTYPE html>
   <html>
@@ -123,7 +125,7 @@ router.get("/", async (ctx, next) => {
     <meta property="telegram_channel" content="turbolabit">
 
     <!-- Redirect to README -->
-    <meta http-equiv="refresh" content="0; url = https://github.com/yc97463/GMapsFix/blob/main/README.md" />
+    <meta http-equiv="refresh" content="0; url = https://github.com/fanlan1210/MetaFacebookFix/blob/main/README.md" />
   </head>
   <body></body>
   </html>
