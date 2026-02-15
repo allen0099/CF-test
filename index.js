@@ -4,6 +4,7 @@ const Router = require("@koa/router");
 const { get } = require("koa/lib/response");
 const serve = require("koa-static");
 const path = require("path");
+import { httpServerHandler } from "cloudflare:node";
 
 const app = new Koa();
 const router = new Router();
@@ -172,3 +173,5 @@ app.use(router.routes()).use(router.allowedMethods());
 app.listen(process.env.PORT || 3000, () => {
   console.log(`Server running on ${process.env.PORT || 3000}\n`);
 });
+
+export default httpServerHandler({ port: process.env.PORT || 3000 });
