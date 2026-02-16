@@ -140,3 +140,6 @@ vite.config.ts.timestamp-*
 
 # Operating System related
 .DS_Store
+
+.wrangler/
+.vscode/

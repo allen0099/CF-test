@@ -1,23 +1,59 @@
-const { parser } = require("html-metadata-parser");
-const Koa = require("koa");
-const Router = require("@koa/router");
-const { get } = require("koa/lib/response");
-const serve = require("koa-static");
-const path = require("path");
+
+import Koa from "koa";
+import Router from "@koa/router";
+import { get } from "koa/lib/response";
+
+import path from "path";
 import { httpServerHandler } from "cloudflare:node";
 
 const app = new Koa();
 const router = new Router();
 
-app.use(serve(path.join(__dirname, "public")));
+
+
+// Custom metadata parser for Cloudflare Workers
+async function fetchMetadata(url) {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+      }
+    });
+
+    if (!response.ok) throw new Error(`Failed to fetch ${url}`);
+
+    const html = await response.text();
+
+    const getMeta = (prop) => {
+      const match = html.match(new RegExp(`<meta property="${prop}" content="([^"]*)"`, "i")) ||
+        html.match(new RegExp(`<meta name="${prop}" content="([^"]*)"`, "i")) ||
+        html.match(new RegExp(`<meta property="${prop}" content='([^']*)'`, "i"));
+      return match ? match[1] : null;
+    };
+
+    const title = getMeta("og:title") || getMeta("title") || "";
+    const description = getMeta("og:description") || getMeta("description") || "";
+    const image = getMeta("og:image") || "";
+    const site_name = getMeta("og:site_name") || "";
+    const urlFromMeta = getMeta("og:url") || url;
+
+    return {
+      og: { title, description, image, url: urlFromMeta, site_name },
+      meta: { title, description, url: urlFromMeta }
+    };
+  } catch (error) {
+    console.error("Error fetching metadata:", error);
+    return {
+      og: { title: "Error", description: "Could not fetch metadata", image: "", url, site_name: "" },
+      meta: { title: "Error", description: "Could not fetch metadata", url }
+    };
+  }
+}
 
 async function generateHtmlWithMetadata(url) {
-  const metadata = await parser(url, { maxRedirects: 5 }).then((result) => {
-    // console.log(JSON.stringify(result, null, 3));
-    return result;
-  });
-  // .replace(`"`, `&#34;`)
-  console.log(metadata);
+  const metadata = await fetchMetadata(url);
+  console.log("Fetched Metadata:", JSON.stringify(metadata, null, 2));
   const processedUrl = metadata.meta.url ?? metadata.og.url ?? url;
   let title = `${metadata.og.title} &#128588; Facebook 分享連結預覽好幫手`;
   let description = `${metadata.og.description ?? ""}${metadata.og.description != null ? " - " : ""}${metadata.og.title}`;
@@ -90,6 +126,10 @@ async function generateHtmlWithMetadata(url) {
   return html;
 }
 
+router.get("/favicon.ico", (ctx) => {
+  ctx.status = 404;
+});
+
 router.get("/", async (ctx, next) => {
   let title = "Facebook 分享連結預覽好幫手 🙌";
   let description = "分享 Facebook 連結有預覽資訊的神奇魔法！✨";
@@ -161,9 +201,9 @@ router.get("/:username/posts/:id", async (ctx, next) => {
 
 router.get("/:id", async (ctx, next) => {
   const url = `https://www.facebook.com/share/${ctx.params.id}`;
-  const metadata = await parser(url).then((result) => {
+  /* const metadata = await parser(url).then((result) => {
     return result;
-  });
+  }); */
   ctx.body = await generateHtmlWithMetadata(url);
   ctx.type = "text/html";
 });

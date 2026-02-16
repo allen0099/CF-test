@@ -1,0 +1,2 @@
+- using pnpm as package manager
+- using pnpx to alternative npx
