@@ -759,7 +759,26 @@ async function fetchMetadata(env, url) {
       getMeta("og:description") || getMeta("description") || "";
     const image = getMeta("og:image") || "";
     const site_name = getMeta("og:site_name") || "";
-    const urlFromMeta = getMeta("og:url") || url;
+    let urlFromMeta = getMeta("og:url") || url;
+
+    // If urlFromMeta needs login, fallback to original URL
+    // Login sample: https://www.facebook.com/login/?next=https%3A%2F%2Fwww.facebook.com%2Fsomepage
+    if (urlFromMeta.includes("/login/")) {
+      console.warn("URL from metadata appears to require login, using original URL");
+
+      // Resolve the next URL if it's a Facebook login redirect
+      try {
+        const loginUrl = new URL(urlFromMeta);
+        const nextParam = loginUrl.searchParams.get("next");
+        if (nextParam) {
+          urlFromMeta = nextParam;
+          console.log("Resolved next URL from login redirect:", urlFromMeta);
+        }
+      } catch (error) {
+        console.error("Error resolving next URL from login redirect:", error);
+        urlFromMeta = url;
+      }
+    }
 
     const metadata = {
       og: { title, description, image, url: urlFromMeta, site_name },
@@ -1096,7 +1115,7 @@ export default {
       }
 
       default:
-        return new Response("Not Found", { status: 404 });
+        return new Response("Unknown route", { status: 404 });
     }
   },
 };
