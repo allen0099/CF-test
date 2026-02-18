@@ -2,39 +2,116 @@
 
 # Meta Facebook 分享連結預覽好幫手 🙌
 
-<details>
-<summary>(README for MetaFacebookFix is WIP)</summary>
+在社群媒體和通訊軟體中分享 Facebook 連結時，自動產生豐富的預覽資訊（Open Graph / Twitter Card / Telegram）的神奇魔法！✨
 
-一個在社群媒體和通訊軟體中分享 Google 地圖路線規劃、商家地標連結有預覽的神奇魔法！✨
+部署於 **Cloudflare Workers**，透過 KV 快取 metadata、Telegram Bot 管理封鎖清單、每次請求即時推送 Telegram log。
+
+## 功能特色
+
+- 🔗 **連結預覽代理** — 將 Facebook 分享連結轉為帶有 OG meta tags 的頁面，讓各平台正確顯示預覽
+- ⚡ **KV 快取** — 解析過的 metadata 存入 Cloudflare KV，避免重複抓取（預設 TTL 1 小時）
+- 📋 **Telegram Log** — 每次連結請求自動推送通知至 Telegram（含 URL、訪客 IP、快取狀態、封鎖狀態）
+- 🚫 **連結封鎖機制** — 支援 domain + path glob 模式封鎖，違規連結返回 403 頁面
+- 🤖 **Telegram Bot 管理** — 透過 Bot 指令管理封鎖清單，支援多管理員
+- 🛡️ **XSS 防護** — 所有動態 metadata 皆經過 HTML 轉義
 
 ## 如何使用
 
-### 直接使用
+### 使用方式
 
-在 Google 地圖按下「複製連結」後，將連結中的 `https://goo.gl` 或 `https://maps.app.goo.gl` 替換成 `https://maps.dstw.dev`。
+將 Facebook 分享連結中的 `https://www.facebook.com` 替換成本服務的 domain 即可。
 
-![](https://maps.dstw.dev/assets/1share.jpg)
+**支援的連結格式：**
 
-![](https://maps.dstw.dev/assets/2paste.jpg)
+| Facebook 原始連結 | 代理連結 |
+|---|---|
+| `https://www.facebook.com/share/{type}/{id}` | `https://YOUR_DOMAIN/share/{type}/{id}` |
+| `https://www.facebook.com/share/{id}` | `https://YOUR_DOMAIN/share/{id}` |
+| `https://www.facebook.com/{username}/posts/{id}` | `https://YOUR_DOMAIN/{username}/posts/{id}` |
 
-![](https://maps.dstw.dev/assets/3edit.jpg)
+訪問代理連結後，爬蟲會看到完整的 OG 預覽，一般使用者則在 2 秒後自動跳轉至原始 Facebook 頁面。
 
-### iOS/iPadOS 分享捷徑
+## 部署
 
-[點這裡新增](https://www.icloud.com/shortcuts/c0ce7e020da14f14b4bb2687a2ecd334) iOS/iPadOS 捷徑，在分享時快速複製 `maps.dstw.dev` 開頭的地圖連結。
+### 前置需求
 
-![](https://maps.dstw.dev/assets/1share.jpg)
+- Node.js
+- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/)
+- Cloudflare 帳號
+- Telegram Bot（透過 [@BotFather](https://t.me/BotFather) 建立）
 
-![](https://maps.dstw.dev/assets/2click.jpg)
+### 步驟
 
-![](https://maps.dstw.dev/assets/3paste.jpg)
+1. **建立 KV Namespace**
 
-### Android 分享規則
+```bash
+npx wrangler kv namespace create METADATA_CACHE
+npx wrangler kv namespace create BLOCKLIST
+```
 
-> 感謝 [@GrassBlock1](https://github.com/GrassBlock1) 小夥伴分享在 Android 裝置的方法，來源：https://t.me/realGrassblock/6651 。
+將回傳的 `id` 填入 `wrangler.jsonc` 中的 `kv_namespaces`。
 
-[點這裡閱讀](https://lab.imgb.space/demo/testing/gmaps) 在 [Tarnhelm](https://github.com/lz233/Tarnhelm) 的規則設定，即可在分享時透過選單轉換分享。
+2. **設定環境變數**
 
-<img src="https://maps.dstw.dev/assets/android-tarnhelm.gif" width="250">
+在 `wrangler.jsonc` 的 `vars` 中設定：
 
-</details>
+| 變數 | 說明 | 預設值 |
+|---|---|---|
+| `TELEGRAM_LOG_LEVEL` | Log 層級 | `"all"` |
+| `CACHE_TTL` | KV 快取 TTL（秒） | `"3600"` |
+| `TELEGRAM_ADMIN_IDS` | 允許管理封鎖清單的 Telegram user ID（逗號分隔） | `""` |
+
+3. **設定 Secrets**
+
+```bash
+npx wrangler secret put TELEGRAM_BOT_TOKEN
+npx wrangler secret put TELEGRAM_CHAT_ID
+npx wrangler secret put TELEGRAM_WEBHOOK_SECRET
+```
+
+4. **部署**
+
+```bash
+npx wrangler deploy
+```
+
+5. **註冊 Telegram Webhook**
+
+```bash
+curl "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=https://YOUR_DOMAIN/webhook/telegram&secret_token=<WEBHOOK_SECRET>"
+```
+
+### 本機開發
+
+```bash
+npx wrangler dev
+```
+
+## Telegram Bot 指令
+
+透過 Telegram Bot 管理封鎖清單（需在 `TELEGRAM_ADMIN_IDS` 中的使用者）：
+
+| 指令 | 說明 |
+|---|---|
+| `/block <pattern> [reason]` | 新增封鎖規則（支援 glob，如 `*.example.com`、`example.com/path/*`） |
+| `/unblock <rule_id>` | 刪除指定封鎖規則 |
+| `/list` | 列出所有封鎖規則 |
+| `/help` | 顯示指令說明 |
+
+## 架構
+
+```
+Request → Route Matching → Blocklist Check (input URL)
+                              ↓
+                        Fetch Metadata (KV Cache → Facebook)
+                              ↓
+                        Blocklist Check (resolved og:url)
+                              ↓
+                        Generate HTML (escaped OG/Twitter/Telegram meta)
+                              ↓
+                        Response + Telegram Log (async, non-blocking)
+```
+
+## License
+
+[MIT License](LICENSE)
