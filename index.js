@@ -830,8 +830,9 @@ async function fetchMetadata(env, url) {
     // If urlFromMeta requires login, resolve the actual destination
     if (urlFromMeta.includes("/login/")) {
       console.warn(`[Metadata] og:url requires login: ${urlFromMeta}`);
-      urlFromMeta = resolveLoginRedirect(urlFromMeta, url);
-      console.log(`[Metadata] Final resolved URL: ${urlFromMeta}`);
+      // Can not get the correct URL, skipped
+      // urlFromMeta = resolveLoginRedirect(urlFromMeta, url);
+      // console.log(`[Metadata] Final resolved URL: ${urlFromMeta}`);
     }
 
     const metadata = {
