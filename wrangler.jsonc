@@ -4,7 +4,7 @@
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "meta-facebook-fix",
+  "name": "facebook-fix",
   "main": "index.js",
   "compatibility_date": "2025-09-27",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
