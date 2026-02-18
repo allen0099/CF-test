@@ -46,6 +46,19 @@ function safeDecodeURI(uri) {
   }
 }
 
+// Decode HTML entities (&#xHEX;, &#DECIMAL;, and common named entities)
+function decodeHtmlEntities(str) {
+  if (!str) return str;
+  const namedEntities = {
+    amp: "&", lt: "<", gt: ">", quot: '"', apos: "'",
+    nbsp: "\u00A0", copy: "\u00A9", reg: "\u00AE",
+  };
+  return str
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
+    .replace(/&(\w+);/g, (match, name) => namedEntities[name.toLowerCase()] ?? match);
+}
+
 // Extract the first Facebook URL from a text message
 function extractFacebookUrl(text) {
   const pattern = /https?:\/\/(?:www\.)?(?:facebook\.com|fb\.com|m\.facebook\.com|web\.facebook\.com)\/\S+/i;
@@ -738,7 +751,7 @@ async function fetchMetadata(env, url) {
         html.match(
           new RegExp(`<meta property="${prop}" content='([^']*)'`, "i")
         );
-      return match ? match[1] : null;
+      return match ? decodeHtmlEntities(match[1]) : null;
     };
 
     const title = getMeta("og:title") || getMeta("title") || "";
