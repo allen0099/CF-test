@@ -3,32 +3,41 @@
  * https://developers.cloudflare.com/workers/wrangler/configuration/
  */
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "facebook-fix",
-  "main": "index.js",
-  "compatibility_date": "2025-09-27",
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  "assets": {
-    // The path to the directory containing the `index.html` file to be served at `/`
-    "directory": "./public",
-  },
-  "observability": {
-    "enabled": true,
-  },
-  /**
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "facebook-fix",
+	"main": "index.js",
+	"compatibility_date": "2025-09-27",
+	"compatibility_flags": [
+		"nodejs_compat",
+		"global_fetch_strictly_public"
+	],
+	"assets": {
+		// The path to the directory containing the `index.html` file to be served at `/`
+		"directory": "./public",
+	},
+	"observability": {
+		"enabled": true,
+	},
+	/**
    * Smart Placement
    * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
    */
-  // "placement": {  "mode": "smart" }
-  /**
+	// "placement": {  "mode": "smart" }
+	/**
    * KV Namespaces
    * https://developers.cloudflare.com/kv/
    */
-  "kv_namespaces": [
-    { "binding": "METADATA_CACHE", "id": "<METADATA_CACHE_KV_ID>" },
-    { "binding": "BLOCKLIST", "id": "<BLOCKLIST_KV_ID>" }
-  ],
-  /**
+	"kv_namespaces": [
+		{
+			"binding": "METADATA_CACHE",
+			"id": "4d6692120a9341d4a7f01a1057096d52"
+		},
+		{
+			"binding": "BLOCKLIST",
+			"id": "40bf96fd451f41469bf42f0029df71b0"
+		}
+	],
+	/**
    * Environment Variables
    * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
    *
@@ -37,10 +46,10 @@
    *   - TELEGRAM_CHAT_ID: Telegram chat/group ID for log messages
    *   - TELEGRAM_WEBHOOK_SECRET: Secret token for webhook verification
    */
-  "vars": {
-    "TELEGRAM_LOG_LEVEL": "all",
-    "CACHE_TTL": "3600",
-    "TELEGRAM_ADMIN_IDS": "",
-    "TELEGRAM_THREAD_ID": ""
-  },
+	"vars": {
+		"TELEGRAM_LOG_LEVEL": "all",
+		"CACHE_TTL": "3600",
+		"TELEGRAM_ADMIN_IDS": "",
+		"TELEGRAM_THREAD_ID": ""
+	},
 }
