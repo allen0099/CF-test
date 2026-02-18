@@ -21,21 +21,25 @@
    */
   // "placement": {  "mode": "smart" }
   /**
-   * Bindings
-   * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
-   * databases, object storage, AI inference, real-time communication and more.
-   * https://developers.cloudflare.com/workers/runtime-apis/bindings/
+   * KV Namespaces
+   * https://developers.cloudflare.com/kv/
    */
+  "kv_namespaces": [
+    { "binding": "METADATA_CACHE", "id": "<METADATA_CACHE_KV_ID>" },
+    { "binding": "BLOCKLIST", "id": "<BLOCKLIST_KV_ID>" }
+  ],
   /**
    * Environment Variables
    * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
-   * Note: Use secrets to store sensitive data.
-   * https://developers.cloudflare.com/workers/configuration/secrets/
+   *
+   * Secrets (set via `npx wrangler secret put <NAME>`):
+   *   - TELEGRAM_BOT_TOKEN: Telegram Bot API token
+   *   - TELEGRAM_CHAT_ID: Telegram chat/group ID for log messages
+   *   - TELEGRAM_WEBHOOK_SECRET: Secret token for webhook verification
    */
-  // "vars": {  "MY_VARIABLE": "production_value" }
-  /**
-   * Service Bindings (communicate between multiple Workers)
-   * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
-   */
-  // "services": [  {   "binding": "MY_SERVICE",   "service": "my-service"  } ]
+  "vars": {
+    "TELEGRAM_LOG_LEVEL": "all",
+    "CACHE_TTL": "3600",
+    "TELEGRAM_ADMIN_IDS": ""
+  },
 }
