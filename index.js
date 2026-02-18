@@ -93,15 +93,19 @@ async function sendTelegramLog(env, logData) {
   }
 
   try {
+    const payload = {
+      chat_id: chatId,
+      text: lines.join("\n"),
+      parse_mode: "HTML",
+      disable_web_page_preview: true,
+    };
+    if (env.TELEGRAM_THREAD_ID) {
+      payload.message_thread_id = Number(env.TELEGRAM_THREAD_ID);
+    }
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: lines.join("\n"),
-        parse_mode: "HTML",
-        disable_web_page_preview: true,
-      }),
+      body: JSON.stringify(payload),
     });
   } catch (error) {
     console.error("Failed to send Telegram log:", error);
@@ -201,16 +205,20 @@ async function sendTelegramReply(env, chatId, text, replyToMessageId) {
   if (!token) return;
 
   try {
+    const payload = {
+      chat_id: chatId,
+      text,
+      parse_mode: "HTML",
+      reply_to_message_id: replyToMessageId,
+      disable_web_page_preview: true,
+    };
+    if (env.TELEGRAM_THREAD_ID) {
+      payload.message_thread_id = Number(env.TELEGRAM_THREAD_ID);
+    }
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: "HTML",
-        reply_to_message_id: replyToMessageId,
-        disable_web_page_preview: true,
-      }),
+      body: JSON.stringify(payload),
     });
   } catch (error) {
     console.error("Failed to send Telegram reply:", error);

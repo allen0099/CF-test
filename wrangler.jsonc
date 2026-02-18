@@ -40,6 +40,7 @@
   "vars": {
     "TELEGRAM_LOG_LEVEL": "all",
     "CACHE_TTL": "3600",
-    "TELEGRAM_ADMIN_IDS": ""
+    "TELEGRAM_ADMIN_IDS": "",
+    "TELEGRAM_THREAD_ID": ""
   },
 }
