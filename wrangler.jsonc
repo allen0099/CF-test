@@ -49,7 +49,7 @@
 	"vars": {
 		"TELEGRAM_LOG_LEVEL": "all",
 		"CACHE_TTL": "3600",
-		"TELEGRAM_ADMIN_IDS": "",
+		"TELEGRAM_ADMIN_IDS": "184805205", // Comma-separated list of Telegram user IDs for admin commands
 		"TELEGRAM_THREAD_ID": ""
 	},
 }

@@ -77,6 +77,7 @@ async function sendTelegramLog(env, logData) {
     `🔗 <b>URL:</b> <code>${escapeHtml(logData.facebookUrl)}</code>`,
     `🌐 <b>Visitor IP:</b> <code>${escapeHtml(logData.visitorIp)}</code>`,
     `🕐 <b>Time:</b> ${escapeHtml(logData.timestamp)}`,
+    `🏢 <b>AS Org:</b> ${escapeHtml(logData.asOrganization || "N/A")}`,
     `📊 <b>Cache:</b> ${logData.cacheHit ? "✅ HIT" : "❌ MISS"}`,
   ];
 
@@ -134,6 +135,30 @@ function matchBlockPattern(pattern, url) {
   } catch {
     return false;
   }
+}
+
+// ===== AS Organization Blocklist =====
+
+async function isAsOrgBlocked(env, asOrganization) {
+  if (!asOrganization) return { blocked: false, reason: "" };
+
+  try {
+    const index = await env.BLOCKLIST.get("as_org_index", { type: "json" });
+    if (!Array.isArray(index) || index.length === 0) {
+      return { blocked: false, reason: "" };
+    }
+
+    const normalizedOrg = asOrganization.toLowerCase();
+    for (const entry of index) {
+      if (normalizedOrg === entry.pattern.toLowerCase()) {
+        return { blocked: true, reason: entry.reason || "Blocked AS Organization" };
+      }
+    }
+  } catch (error) {
+    console.error("Error checking AS org blocklist:", error);
+  }
+
+  return { blocked: false, reason: "" };
 }
 
 async function isBlocked(env, url) {
@@ -243,6 +268,7 @@ async function handleBotCommand(env, message) {
     const helpText = [
       "🔧 <b>封鎖清單管理指令</b>",
       "",
+      "<b>連結封鎖：</b>",
       "/block <code>&lt;pattern&gt;</code> [reason]",
       "  新增封鎖規則（支援 domain + path glob）",
       "  範例：<code>/block *.example.com 違反政策</code>",
@@ -252,7 +278,18 @@ async function handleBotCommand(env, message) {
       "  刪除指定封鎖規則",
       "",
       "/list",
-      "  列出所有封鎖規則",
+      "  列出所有連結封鎖規則",
+      "",
+      "<b>AS Organization 封鎖：</b>",
+      "/block_org <code>&lt;name&gt;</code> [reason]",
+      "  封鎖特定 AS Organization 來源",
+      "  範例：<code>/block_org Cloudflare bot traffic</code>",
+      "",
+      "/unblock_org <code>&lt;name&gt;</code>",
+      "  解除 AS Organization 封鎖",
+      "",
+      "/list_org",
+      "  列出所有 AS Organization 封鎖規則",
       "",
       "/help",
       "  顯示此說明",
@@ -376,6 +413,116 @@ async function handleBotCommand(env, message) {
         `• <code>${escapeHtml(rule.pattern)}</code>`,
         `  原因：${escapeHtml(rule.reason)}`,
         `  ID：<code>${escapeHtml(rule.id)}</code>`,
+        ""
+      );
+    }
+    await sendTelegramReply(env, chatId, lines.join("\n"), messageId);
+    return;
+  }
+
+  if (command === "/block_org") {
+    if (args.length === 0) {
+      await sendTelegramReply(
+        env,
+        chatId,
+        "⚠️ 用法：<code>/block_org &lt;name&gt; [reason]</code>",
+        messageId
+      );
+      return;
+    }
+
+    const orgName = args[0];
+    const reason = args.slice(1).join(" ") || "Blocked AS Organization";
+
+    const index =
+      (await env.BLOCKLIST.get("as_org_index", { type: "json" })) || [];
+
+    // Check for duplicate
+    if (index.some((e) => e.pattern.toLowerCase() === orgName.toLowerCase())) {
+      await sendTelegramReply(
+        env,
+        chatId,
+        `⚠️ <code>${escapeHtml(orgName)}</code> 已在封鎖清單中。`,
+        messageId
+      );
+      return;
+    }
+
+    index.push({
+      pattern: orgName,
+      reason,
+      createdAt: new Date().toISOString(),
+      createdBy: userId,
+    });
+    await env.BLOCKLIST.put("as_org_index", JSON.stringify(index));
+
+    const reply = [
+      "✅ <b>AS Organization 封鎖已新增</b>",
+      "",
+      `🏢 <b>Name:</b> <code>${escapeHtml(orgName)}</code>`,
+      `📄 <b>Reason:</b> ${escapeHtml(reason)}`,
+    ].join("\n");
+    await sendTelegramReply(env, chatId, reply, messageId);
+    return;
+  }
+
+  if (command === "/unblock_org") {
+    if (args.length === 0) {
+      await sendTelegramReply(
+        env,
+        chatId,
+        "⚠️ 用法：<code>/unblock_org &lt;name&gt;</code>",
+        messageId
+      );
+      return;
+    }
+
+    const orgName = args.join(" ");
+    const index =
+      (await env.BLOCKLIST.get("as_org_index", { type: "json" })) || [];
+    const newIndex = index.filter(
+      (e) => e.pattern.toLowerCase() !== orgName.toLowerCase()
+    );
+
+    if (newIndex.length === index.length) {
+      await sendTelegramReply(
+        env,
+        chatId,
+        `❌ 找不到 AS Organization <code>${escapeHtml(orgName)}</code>`,
+        messageId
+      );
+      return;
+    }
+
+    await env.BLOCKLIST.put("as_org_index", JSON.stringify(newIndex));
+
+    const reply = [
+      "🗑️ <b>AS Organization 封鎖已解除</b>",
+      "",
+      `🏢 <b>Name:</b> <code>${escapeHtml(orgName)}</code>`,
+    ].join("\n");
+    await sendTelegramReply(env, chatId, reply, messageId);
+    return;
+  }
+
+  if (command === "/list_org") {
+    const index =
+      (await env.BLOCKLIST.get("as_org_index", { type: "json" })) || [];
+    if (index.length === 0) {
+      await sendTelegramReply(
+        env,
+        chatId,
+        "📋 AS Organization 封鎖清單目前是空的。",
+        messageId
+      );
+      return;
+    }
+
+    const lines = ["📋 <b>AS Organization 封鎖清單</b>", ""];
+    for (const entry of index) {
+      lines.push(
+        `• <code>${escapeHtml(entry.pattern)}</code>`,
+        `  原因：${escapeHtml(entry.reason)}`,
         ""
       );
     }
@@ -646,6 +793,28 @@ function matchRoute(pathname) {
 async function handleLinkRequest(request, env, executionCtx, facebookUrl) {
   const visitorIp = request.headers.get("cf-connecting-ip") || "unknown";
   const timestamp = new Date().toISOString();
+  const cf = request.cf || {};
+  const asOrganization = cf.asOrganization || "";
+
+  // Phase 0: Check AS Organization blocklist
+  const asOrgBlock = await isAsOrgBlocked(env, asOrganization);
+  if (asOrgBlock.blocked) {
+    executionCtx.waitUntil(
+      sendTelegramLog(env, {
+        facebookUrl,
+        visitorIp,
+        timestamp,
+        asOrganization,
+        cacheHit: false,
+        blocked: true,
+        blockReason: `AS Org: ${asOrgBlock.reason}`,
+      })
+    );
+    return htmlResponse(
+      generateBlockedPage(facebookUrl, `來源組織 (${asOrganization}) 已被封鎖：${asOrgBlock.reason}`),
+      403
+    );
+  }
 
   // Phase 1: Check blocklist against input URL
   const inputBlock = await isBlocked(env, facebookUrl);
@@ -655,6 +824,7 @@ async function handleLinkRequest(request, env, executionCtx, facebookUrl) {
         facebookUrl,
         visitorIp,
         timestamp,
+        asOrganization,
         cacheHit: false,
         blocked: true,
         blockReason: inputBlock.reason,
@@ -677,6 +847,7 @@ async function handleLinkRequest(request, env, executionCtx, facebookUrl) {
           facebookUrl,
           visitorIp,
           timestamp,
+          asOrganization,
           cacheHit,
           blocked: true,
           blockReason: resolvedBlock.reason,
@@ -696,6 +867,7 @@ async function handleLinkRequest(request, env, executionCtx, facebookUrl) {
       facebookUrl,
       visitorIp,
       timestamp,
+      asOrganization,
       cacheHit,
       blocked: false,
       resolvedUrl,
