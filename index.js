@@ -256,13 +256,20 @@ async function handleBotCommand(env, message) {
   const messageId = message.message_id;
   const text = (message.text || "").trim();
 
+  console.log(`[Bot] Message from user ${userId} in chat ${chatId}: ${text}`);
+
   // Only process commands (starts with /)
-  if (!text.startsWith("/")) return;
+  if (!text.startsWith("/")) {
+    console.log("[Bot] Not a command, skipping");
+    return;
+  }
 
   // Parse command and arguments (handle @botname suffix)
   const parts = text.split(/\s+/);
   const command = parts[0].split("@")[0].toLowerCase();
   const args = parts.slice(1);
+
+  console.log(`[Bot] Parsed command: ${command}, args: [${args.join(", ")}]`);
 
   if (command === "/help") {
     const helpText = [
@@ -535,6 +542,7 @@ async function handleTelegramWebhook(request, env) {
   // Verify webhook secret
   const secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token");
   if (!secret || secret !== env.TELEGRAM_WEBHOOK_SECRET) {
+    console.warn("[Webhook] Unauthorized request — invalid or missing secret");
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -542,12 +550,17 @@ async function handleTelegramWebhook(request, env) {
   try {
     update = await request.json();
   } catch {
+    console.error("[Webhook] Failed to parse request body as JSON");
     return new Response("Bad Request", { status: 400 });
   }
+
+  console.log("[Webhook] Received update:", JSON.stringify(update));
 
   // Process message with bot commands
   if (update.message) {
     await handleBotCommand(env, update.message);
+  } else {
+    console.log("[Webhook] Update has no message field, skipping");
   }
 
   // Always return 200 to Telegram to acknowledge receipt
@@ -782,7 +795,12 @@ function matchRoute(pathname) {
 
   const catchAllMatch = pathname.match(/^\/([^/]+)$/);
   if (catchAllMatch) {
-    return { route: "catch-all", id: catchAllMatch[1] };
+    const id = catchAllMatch[1];
+    // Skip paths with file extensions (e.g. robots.txt, sitemap.xml, .well-known)
+    if (/\.\w{1,10}$/.test(id)) {
+      return { route: "not-found" };
+    }
+    return { route: "catch-all", id };
   }
 
   return { route: "not-found" };

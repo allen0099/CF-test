@@ -10,9 +10,10 @@
 
 - 🔗 **連結預覽代理** — 將 Facebook 分享連結轉為帶有 OG meta tags 的頁面，讓各平台正確顯示預覽
 - ⚡ **KV 快取** — 解析過的 metadata 存入 Cloudflare KV，避免重複抓取（預設 TTL 1 小時）
-- 📋 **Telegram Log** — 每次連結請求自動推送通知至 Telegram（含 URL、訪客 IP、快取狀態、封鎖狀態）
+- 📋 **Telegram Log** — 每次連結請求自動推送通知至 Telegram（含 URL、訪客 IP、AS Organization、快取狀態、封鎖狀態），支援 Forum thread 模式
 - 🚫 **連結封鎖機制** — 支援 domain + path glob 模式封鎖，違規連結返回 403 頁面
-- 🤖 **Telegram Bot 管理** — 透過 Bot 指令管理封鎖清單，支援多管理員
+- 🏢 **AS Organization 封鎖** — 依據 Cloudflare 提供的 `request.cf.asOrganization` 封鎖特定來源組織
+- 🤖 **Telegram Bot 管理** — 透過 Bot 指令管理連結封鎖與 AS Organization 封鎖清單，支援多管理員
 - 🛡️ **XSS 防護** — 所有動態 metadata 皆經過 HTML 轉義
 
 ## 如何使用
@@ -60,14 +61,37 @@ npx wrangler kv namespace create BLOCKLIST
 | `TELEGRAM_LOG_LEVEL` | Log 層級 | `"all"` |
 | `CACHE_TTL` | KV 快取 TTL（秒） | `"3600"` |
 | `TELEGRAM_ADMIN_IDS` | 允許管理封鎖清單的 Telegram user ID（逗號分隔） | `""` |
+| `TELEGRAM_THREAD_ID` | Telegram Forum 話題 ID（留空則發送到一般群組） | `""` |
 
 3. **設定 Secrets**
+
+以下為敏感資訊，透過 `wrangler secret put` 設定，不會出現在程式碼或設定檔中：
 
 ```bash
 npx wrangler secret put TELEGRAM_BOT_TOKEN
 npx wrangler secret put TELEGRAM_CHAT_ID
 npx wrangler secret put TELEGRAM_WEBHOOK_SECRET
 ```
+
+| Secret | 說明 | 取得方式 |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | Telegram Bot API token | 透過 [@BotFather](https://t.me/BotFather) 建立 Bot 後取得 |
+| `TELEGRAM_CHAT_ID` | 接收 log 的 Telegram 群組/頻道 ID | 將 Bot 加入群組後，透過 `getUpdates` API 查看 |
+| `TELEGRAM_WEBHOOK_SECRET` | Webhook 驗證用的隨機 secret | 自行產生（見下方說明） |
+
+**產生 `TELEGRAM_WEBHOOK_SECRET`：**
+
+使用任何安全的隨機字串產生方式，例如：
+
+```bash
+# Node.js
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# PowerShell
+-join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Max 256) })
+```
+
+複製產生的字串，用於 `wrangler secret put` 和註冊 webhook 時的 `secret_token` 參數（兩者必須相同）。
 
 4. **部署**
 
@@ -77,9 +101,28 @@ npx wrangler deploy
 
 5. **註冊 Telegram Webhook**
 
+部署完成後，向 Telegram 註冊 webhook，讓 Bot 指令能被 Worker 接收處理：
+
 ```bash
 curl "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=https://YOUR_DOMAIN/webhook/telegram&secret_token=<WEBHOOK_SECRET>"
 ```
+
+> `<BOT_TOKEN>` 替換為你的 Bot token，`YOUR_DOMAIN` 替換為 Worker 的 domain，`<WEBHOOK_SECRET>` 必須與步驟 3 設定的 `TELEGRAM_WEBHOOK_SECRET` 相同。
+
+驗證 webhook 是否設定成功：
+
+```bash
+curl "https://api.telegram.org/bot<BOT_TOKEN>/getWebhookInfo"
+```
+
+**取得 `TELEGRAM_THREAD_ID`（Forum 群組）：**
+
+如果你的 Telegram 群組啟用了 Forum（話題）模式，需要指定 thread ID 才能將訊息發送到正確的話題：
+
+1. 在目標話題中發送一則訊息
+2. 呼叫 `https://api.telegram.org/bot<BOT_TOKEN>/getUpdates`
+3. 在回傳的 JSON 中找到該訊息的 `message_thread_id` 值
+4. 將該值填入 `wrangler.jsonc` 的 `TELEGRAM_THREAD_ID`
 
 ### 本機開發
 
@@ -91,17 +134,34 @@ npx wrangler dev
 
 透過 Telegram Bot 管理封鎖清單（需在 `TELEGRAM_ADMIN_IDS` 中的使用者）：
 
+### 連結封鎖
+
 | 指令 | 說明 |
 |---|---|
 | `/block <pattern> [reason]` | 新增封鎖規則（支援 glob，如 `*.example.com`、`example.com/path/*`） |
 | `/unblock <rule_id>` | 刪除指定封鎖規則 |
-| `/list` | 列出所有封鎖規則 |
-| `/help` | 顯示指令說明 |
+| `/list` | 列出所有連結封鎖規則 |
+
+### AS Organization 封鎖
+
+| 指令 | 說明 |
+|---|---|
+| `/block_org <name> [reason]` | 封鎖特定 AS Organization 來源（如 `/block_org Cloudflare bot traffic`） |
+| `/unblock_org <name>` | 解除 AS Organization 封鎖 |
+| `/list_org` | 列出所有 AS Organization 封鎖規則 |
+
+### 其他
+
+| 指令 | 說明 |
+|---|---|
+| `/help` | 顯示所有指令說明 |
 
 ## 架構
 
 ```
-Request → Route Matching → Blocklist Check (input URL)
+Request → Route Matching → AS Org Check (request.cf.asOrganization)
+                              ↓
+                        Blocklist Check (input URL)
                               ↓
                         Fetch Metadata (KV Cache → Facebook)
                               ↓
