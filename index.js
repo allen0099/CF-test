@@ -70,7 +70,8 @@ function extractFacebookUrl(text) {
 function facebookUrlToWorkerUrl(baseUrl, facebookUrl) {
   try {
     const parsed = new URL(facebookUrl);
-    return baseUrl + parsed.pathname;
+    const base = baseUrl.startsWith("http") ? baseUrl : `https://${baseUrl}`;
+    return base + parsed.pathname;
   } catch {
     return null;
   }
@@ -647,15 +648,14 @@ async function handlePrivateLinkParsing(env, message) {
   const lines = [];
 
   if (title) {
-    lines.push(`📄 <b>${escapeHtml(title)}</b>`);
+    lines.push(`<b>${escapeHtml(title)}</b>`);
   }
   if (truncatedDesc) {
     lines.push(`${escapeHtml(truncatedDesc)}`);
   }
 
   lines.push("");
-  lines.push(`🔗 <b>原始連結：</b>`);
-  lines.push(`<code>${escapeHtml(resolvedUrl)}</code>`);
+  lines.push(`🔗 <b><a href="${escapeHtml(resolvedUrl)}">原始連結</a></b>`);
 
   // Worker preview link (if WORKER_BASE_URL is configured)
   const baseUrl = env.WORKER_BASE_URL;
@@ -664,7 +664,7 @@ async function handlePrivateLinkParsing(env, message) {
     if (workerUrl) {
       lines.push("");
       lines.push(`🌐 <b>預覽連結：</b>`);
-      lines.push(`${escapeHtml(workerUrl)}`);
+      lines.push(`<code>${escapeHtml(workerUrl)}</code>`);
     }
   }
 
