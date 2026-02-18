@@ -46,6 +46,72 @@ function safeDecodeURI(uri) {
   }
 }
 
+function safeDecodeURIComponent(component) {
+  try {
+    return decodeURIComponent(component);
+  } catch {
+    return component;
+  }
+}
+
+// Allowed Facebook domains for login redirect resolution
+const FACEBOOK_DOMAINS = new Set([
+  "www.facebook.com",
+  "facebook.com",
+  "m.facebook.com",
+  "web.facebook.com",
+]);
+
+/**
+ * Resolve a Facebook login redirect URL back to the intended destination.
+ * Returns the resolved URL, or the provided fallbackUrl if resolution fails.
+ */
+function resolveLoginRedirect(loginUrl, fallbackUrl) {
+  try {
+    const parsed = new URL(loginUrl);
+
+    const nextParam = parsed.searchParams.get("next");
+    if (!nextParam) {
+      console.warn("[LoginResolve] No 'next' parameter found in login URL, falling back to original URL");
+      return fallbackUrl;
+    }
+
+    const decodedNext = safeDecodeURIComponent(nextParam);
+    console.log(`[LoginResolve] Decoded 'next' parameter: ${decodedNext}`);
+
+    const nextUrl = new URL(decodedNext);
+
+    // Validate the next URL points to a Facebook domain (prevent SSRF)
+    if (!FACEBOOK_DOMAINS.has(nextUrl.hostname)) {
+      console.warn(`[LoginResolve] 'next' URL has non-Facebook domain: ${nextUrl.hostname}, falling back to original URL`);
+      return fallbackUrl;
+    }
+
+    // Strategy 1: The next URL has story_fbid + id params (permalink.php style)
+    const storyFbid = nextUrl.searchParams.get("story_fbid");
+    const id = nextUrl.searchParams.get("id");
+    if (storyFbid && id) {
+      const resolved = `https://www.facebook.com/${id}/posts/${storyFbid}`;
+      console.log(`[LoginResolve] Resolved via story_fbid+id: ${resolved}`);
+      return resolved;
+    }
+
+    // Strategy 2: The next URL has a meaningful path (not just "/")
+    if (nextUrl.pathname && nextUrl.pathname !== "/") {
+      const resolved = `https://www.facebook.com${nextUrl.pathname}`;
+      console.log(`[LoginResolve] Resolved via path: ${resolved}`);
+      return resolved;
+    }
+
+    // If nothing matched, fall back
+    console.warn("[LoginResolve] Could not extract usable destination from 'next' URL, falling back to original URL");
+    return fallbackUrl;
+  } catch (error) {
+    console.error("[LoginResolve] Error resolving login redirect:", error);
+    return fallbackUrl;
+  }
+}
+
 // Decode HTML entities (&#xHEX;, &#DECIMAL;, and common named entities)
 function decodeHtmlEntities(str) {
   if (!str) return str;
@@ -761,23 +827,11 @@ async function fetchMetadata(env, url) {
     const site_name = getMeta("og:site_name") || "";
     let urlFromMeta = getMeta("og:url") || url;
 
-    // If urlFromMeta needs login, fallback to original URL
-    // Login sample: https://www.facebook.com/login/?next=https%3A%2F%2Fwww.facebook.com%2Fsomepage
+    // If urlFromMeta requires login, resolve the actual destination
     if (urlFromMeta.includes("/login/")) {
-      console.warn("URL from metadata appears to require login, using original URL");
-
-      // Resolve the next URL if it's a Facebook login redirect
-      try {
-        const loginUrl = new URL(urlFromMeta);
-        const nextParam = loginUrl.searchParams.get("next");
-        if (nextParam) {
-          urlFromMeta = nextParam;
-          console.log("Resolved next URL from login redirect:", urlFromMeta);
-        }
-      } catch (error) {
-        console.error("Error resolving next URL from login redirect:", error);
-        urlFromMeta = url;
-      }
+      console.warn(`[Metadata] og:url requires login: ${urlFromMeta}`);
+      urlFromMeta = resolveLoginRedirect(urlFromMeta, url);
+      console.log(`[Metadata] Final resolved URL: ${urlFromMeta}`);
     }
 
     const metadata = {
