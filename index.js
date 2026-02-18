@@ -225,7 +225,7 @@ function isAdminUser(env, userId) {
   return adminIds.includes(String(userId));
 }
 
-async function sendTelegramReply(env, chatId, text, replyToMessageId) {
+async function sendTelegramReply(env, chatId, text, replyToMessageId, chatType) {
   const token = env.TELEGRAM_BOT_TOKEN;
   if (!token) return;
 
@@ -237,14 +237,19 @@ async function sendTelegramReply(env, chatId, text, replyToMessageId) {
       reply_to_message_id: replyToMessageId,
       disable_web_page_preview: true,
     };
-    if (env.TELEGRAM_THREAD_ID) {
+    // Only set thread ID for group/supergroup chats, not private chats
+    if (env.TELEGRAM_THREAD_ID && chatType !== "private") {
       payload.message_thread_id = Number(env.TELEGRAM_THREAD_ID);
     }
-    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    const resp = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+    if (!resp.ok) {
+      const body = await resp.text();
+      console.error(`[Bot] sendMessage failed (${resp.status}):`, body);
+    }
   } catch (error) {
     console.error("Failed to send Telegram reply:", error);
   }
@@ -254,9 +259,10 @@ async function handleBotCommand(env, message) {
   const chatId = message.chat.id;
   const userId = message.from?.id;
   const messageId = message.message_id;
+  const chatType = message.chat?.type;
   const text = (message.text || "").trim();
 
-  console.log(`[Bot] Message from user ${userId} in chat ${chatId}: ${text}`);
+  console.log(`[Bot] Message from user ${userId} in chat ${chatId} (${chatType}): ${text}`);
 
   // Only process commands (starts with /)
   if (!text.startsWith("/")) {
@@ -301,7 +307,7 @@ async function handleBotCommand(env, message) {
       "/help",
       "  顯示此說明",
     ].join("\n");
-    await sendTelegramReply(env, chatId, helpText, messageId);
+    await sendTelegramReply(env, chatId, helpText, messageId, chatType);
     return;
   }
 
@@ -311,7 +317,8 @@ async function handleBotCommand(env, message) {
       env,
       chatId,
       "⛔ 你沒有權限執行此操作。",
-      messageId
+      messageId,
+      chatType
     );
     return;
   }
@@ -322,7 +329,8 @@ async function handleBotCommand(env, message) {
         env,
         chatId,
         "⚠️ 用法：<code>/block &lt;pattern&gt; [reason]</code>",
-        messageId
+        messageId,
+        chatType
       );
       return;
     }
@@ -352,7 +360,7 @@ async function handleBotCommand(env, message) {
       `📄 <b>Reason:</b> ${escapeHtml(reason)}`,
       `🆔 <b>Rule ID:</b> <code>${ruleId}</code>`,
     ].join("\n");
-    await sendTelegramReply(env, chatId, reply, messageId);
+    await sendTelegramReply(env, chatId, reply, messageId, chatType);
     return;
   }
 
@@ -362,7 +370,8 @@ async function handleBotCommand(env, message) {
         env,
         chatId,
         "⚠️ 用法：<code>/unblock &lt;rule_id&gt;</code>",
-        messageId
+        messageId,
+        chatType
       );
       return;
     }
@@ -376,7 +385,8 @@ async function handleBotCommand(env, message) {
         env,
         chatId,
         `❌ 找不到規則 <code>${escapeHtml(ruleId)}</code>`,
-        messageId
+        messageId,
+        chatType
       );
       return;
     }
@@ -393,7 +403,7 @@ async function handleBotCommand(env, message) {
       `📝 <b>Pattern:</b> <code>${escapeHtml(existing.pattern)}</code>`,
       `🆔 <b>Rule ID:</b> <code>${escapeHtml(ruleId)}</code>`,
     ].join("\n");
-    await sendTelegramReply(env, chatId, reply, messageId);
+    await sendTelegramReply(env, chatId, reply, messageId, chatType);
     return;
   }
 
@@ -405,7 +415,8 @@ async function handleBotCommand(env, message) {
         env,
         chatId,
         "📋 封鎖清單目前是空的。",
-        messageId
+        messageId,
+        chatType
       );
       return;
     }
@@ -423,7 +434,7 @@ async function handleBotCommand(env, message) {
         ""
       );
     }
-    await sendTelegramReply(env, chatId, lines.join("\n"), messageId);
+    await sendTelegramReply(env, chatId, lines.join("\n"), messageId, chatType);
     return;
   }
 
@@ -433,7 +444,8 @@ async function handleBotCommand(env, message) {
         env,
         chatId,
         "⚠️ 用法：<code>/block_org &lt;name&gt; [reason]</code>",
-        messageId
+        messageId,
+        chatType
       );
       return;
     }
@@ -450,7 +462,8 @@ async function handleBotCommand(env, message) {
         env,
         chatId,
         `⚠️ <code>${escapeHtml(orgName)}</code> 已在封鎖清單中。`,
-        messageId
+        messageId,
+        chatType
       );
       return;
     }
@@ -469,7 +482,7 @@ async function handleBotCommand(env, message) {
       `🏢 <b>Name:</b> <code>${escapeHtml(orgName)}</code>`,
       `📄 <b>Reason:</b> ${escapeHtml(reason)}`,
     ].join("\n");
-    await sendTelegramReply(env, chatId, reply, messageId);
+    await sendTelegramReply(env, chatId, reply, messageId, chatType);
     return;
   }
 
@@ -479,7 +492,8 @@ async function handleBotCommand(env, message) {
         env,
         chatId,
         "⚠️ 用法：<code>/unblock_org &lt;name&gt;</code>",
-        messageId
+        messageId,
+        chatType
       );
       return;
     }
@@ -496,7 +510,8 @@ async function handleBotCommand(env, message) {
         env,
         chatId,
         `❌ 找不到 AS Organization <code>${escapeHtml(orgName)}</code>`,
-        messageId
+        messageId,
+        chatType
       );
       return;
     }
@@ -508,7 +523,7 @@ async function handleBotCommand(env, message) {
       "",
       `🏢 <b>Name:</b> <code>${escapeHtml(orgName)}</code>`,
     ].join("\n");
-    await sendTelegramReply(env, chatId, reply, messageId);
+    await sendTelegramReply(env, chatId, reply, messageId, chatType);
     return;
   }
 
@@ -520,7 +535,8 @@ async function handleBotCommand(env, message) {
         env,
         chatId,
         "📋 AS Organization 封鎖清單目前是空的。",
-        messageId
+        messageId,
+        chatType
       );
       return;
     }
@@ -533,7 +549,7 @@ async function handleBotCommand(env, message) {
         ""
       );
     }
-    await sendTelegramReply(env, chatId, lines.join("\n"), messageId);
+    await sendTelegramReply(env, chatId, lines.join("\n"), messageId, chatType);
     return;
   }
 }
