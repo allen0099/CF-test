@@ -552,6 +552,24 @@ async function fetchMetadata(env, url) {
       return match ? decodeHtmlEntities(match[1]) : null;
     };
 
+    // Log if exist: property <link rel="canonical" href="..."> (some sites put the real URL here)
+    const canonicalMatch = html.match(
+      /<link rel="canonical" href="([^"]*)"/i
+    ) || html.match(/<link rel="canonical" href='([^']*)'/i);
+    if (canonicalMatch) {
+      const canonicalUrl = decodeHtmlEntities(canonicalMatch[1]);
+      console.log(`[Metadata] Found canonical URL: ${canonicalUrl}`);
+    }
+
+    // Log if exist: <link rel="alternate" hreflang="x-default" href="..."> (some sites put the real URL here for internationalization)
+    const alternateMatch = html.match(
+      /<link rel="alternate" hreflang="x-default" href="([^"]*)"/i
+    ) || html.match(/<link rel="alternate" hreflang="x-default" href='([^']*)'/i);
+    if (alternateMatch) {
+      const alternateUrl = decodeHtmlEntities(alternateMatch[1]);
+      console.log(`[Metadata] Found alternate x-default URL: ${alternateUrl}`);
+    }
+
     const title = getMeta("og:title") || getMeta("title") || "";
     const description =
       getMeta("og:description") || getMeta("description") || "";
