@@ -125,24 +125,6 @@ function decodeHtmlEntities(str) {
     .replace(/&(\w+);/g, (match, name) => namedEntities[name.toLowerCase()] ?? match);
 }
 
-// Extract the first Facebook URL from a text message
-function extractFacebookUrl(text) {
-  const pattern = /https?:\/\/(?:www\.)?(?:facebook\.com|fb\.com|m\.facebook\.com|web\.facebook\.com)\/\S+/i;
-  const match = text.match(pattern);
-  return match ? match[0] : null;
-}
-
-// Convert a Facebook URL to a Worker preview URL
-function facebookUrlToWorkerUrl(baseUrl, facebookUrl) {
-  try {
-    const parsed = new URL(facebookUrl);
-    const base = baseUrl.startsWith("http") ? baseUrl : `https://${baseUrl}`;
-    return base + parsed.pathname;
-  } catch {
-    return null;
-  }
-}
-
 // ===== KV Cache =====
 
 async function cacheGet(env, url) {
@@ -336,13 +318,9 @@ async function handleBotCommand(env, message) {
 
   console.log(`[Bot] Message from user ${userId} in chat ${chatId} (${chatType}): ${text}`);
 
-  // Handle non-command messages: parse Facebook links in private chats
+  // Ignore non-command messages
   if (!text.startsWith("/")) {
-    if (chatType === "private") {
-      await handlePrivateLinkParsing(env, message);
-    } else {
-      console.log("[Bot] Not a command in non-private chat, skipping");
-    }
+    console.log("[Bot] Not a command, skipping");
     return;
   }
 
@@ -503,101 +481,6 @@ async function handleBotCommand(env, message) {
     return;
   }
 
-}
-
-async function handlePrivateLinkParsing(env, message) {
-  const chatId = message.chat.id;
-  const userId = message.from?.id;
-  const messageId = message.message_id;
-  const text = (message.text || "").trim();
-
-  const facebookUrl = extractFacebookUrl(text);
-  if (!facebookUrl) {
-    console.log(`[Bot] No Facebook URL found in private message from user ${userId}`);
-    return;
-  }
-
-  console.log(`[Bot] Private link parsing for user ${userId}: ${facebookUrl}`);
-
-  // Check blocklist
-  const blockResult = await isBlocked(env, facebookUrl);
-  if (blockResult.blocked) {
-    console.log(`[Bot] URL blocked: ${facebookUrl} — ${blockResult.reason}`);
-    await sendTelegramReply(
-      env,
-      chatId,
-      `🚫 此連結已被封鎖\n原因：${escapeHtml(blockResult.reason)}`,
-      messageId,
-      "private"
-    );
-    return;
-  }
-
-  // Fetch metadata
-  const metadata = await fetchMetadata(env, facebookUrl);
-  const cacheHit = metadata._cacheHit;
-  const resolvedUrl = metadata.meta.url ?? metadata.og.url ?? facebookUrl;
-
-  console.log(`[Bot] Metadata fetched for ${facebookUrl} (cache: ${cacheHit ? "HIT" : "MISS"})`);
-
-  // Check blocklist against resolved URL
-  if (resolvedUrl !== facebookUrl) {
-    const resolvedBlock = await isBlocked(env, resolvedUrl);
-    if (resolvedBlock.blocked) {
-      console.log(`[Bot] Resolved URL blocked: ${resolvedUrl} — ${resolvedBlock.reason}`);
-      await sendTelegramReply(
-        env,
-        chatId,
-        `🚫 此連結已被封鎖\n原因：${escapeHtml(resolvedBlock.reason)}`,
-        messageId,
-        "private"
-      );
-      return;
-    }
-  }
-
-  // Build reply
-  const title = metadata.og.title || "";
-  const description = metadata.og.description || "";
-  const truncatedDesc = description.length > 200 ? description.slice(0, 200) + "…" : description;
-
-  const lines = [];
-
-  if (title) {
-    lines.push(`<b>${escapeHtml(title)}</b>`);
-  }
-  if (truncatedDesc) {
-    lines.push(`${escapeHtml(truncatedDesc)}`);
-  }
-
-  lines.push("");
-  lines.push(`🔗 <b><a href="${escapeHtml(resolvedUrl)}">原始連結</a></b>`);
-
-  // Worker preview link (if WORKER_BASE_URL is configured)
-  const baseUrl = env.WORKER_BASE_URL;
-  if (baseUrl) {
-    const workerUrl = facebookUrlToWorkerUrl(baseUrl, resolvedUrl);
-    if (workerUrl) {
-      lines.push("");
-      lines.push(`🌐 <b>預覽連結：</b>`);
-      lines.push(`<code>${escapeHtml(workerUrl)}</code>`);
-    }
-  }
-
-  await sendTelegramReply(env, chatId, lines.join("\n"), messageId, "private", {
-    disableWebPagePreview: false,
-  });
-
-  // Send log to Telegram log channel
-  const timestamp = new Date().toISOString();
-  await sendTelegramLog(env, {
-    facebookUrl,
-    visitorIp: `Telegram user ${userId}`,
-    timestamp,
-    cacheHit,
-    blocked: false,
-    resolvedUrl,
-  });
 }
 
 async function handleTelegramWebhook(request, env) {
