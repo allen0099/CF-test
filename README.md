@@ -10,10 +10,9 @@
 
 - 🔗 **連結預覽代理** — 將 Facebook 分享連結轉為帶有 OG meta tags 的頁面，讓各平台正確顯示預覽
 - ⚡ **KV 快取** — 解析過的 metadata 存入 Cloudflare KV，避免重複抓取（預設 TTL 1 小時）
-- 📋 **Telegram Log** — 每次連結請求自動推送通知至 Telegram（含 URL、訪客 IP、AS Organization、快取狀態、封鎖狀態），支援 Forum thread 模式
+- 📋 **Telegram Log** — 每次連結請求自動推送通知至 Telegram（含 URL、訪客 IP、快取狀態、封鎖狀態），支援 Forum thread 模式
 - 🚫 **連結封鎖機制** — 支援 domain + path glob 模式封鎖，違規連結返回 403 頁面
-- 🏢 **AS Organization 封鎖** — 依據 Cloudflare 提供的 `request.cf.asOrganization` 封鎖特定來源組織
-- 🤖 **Telegram Bot 管理** — 透過 Bot 指令管理連結封鎖與 AS Organization 封鎖清單，支援多管理員
+- 🤖 **Telegram Bot 管理** — 透過 Bot 指令管理連結封鎖清單，支援多管理員
 - 🛡️ **XSS 防護** — 所有動態 metadata 皆經過 HTML 轉義
 
 ## 如何使用
@@ -142,14 +141,6 @@ npx wrangler dev
 | `/unblock <rule_id>` | 刪除指定封鎖規則 |
 | `/list` | 列出所有連結封鎖規則 |
 
-### AS Organization 封鎖
-
-| 指令 | 說明 |
-|---|---|
-| `/block_org <name> [reason]` | 封鎖特定 AS Organization 來源（如 `/block_org Cloudflare bot traffic`） |
-| `/unblock_org <name>` | 解除 AS Organization 封鎖 |
-| `/list_org` | 列出所有 AS Organization 封鎖規則 |
-
 ### 其他
 
 | 指令 | 說明 |
@@ -159,9 +150,7 @@ npx wrangler dev
 ## 架構
 
 ```
-Request → Route Matching → AS Org Check (request.cf.asOrganization)
-                              ↓
-                        Blocklist Check (input URL)
+Request → Route Matching → Blocklist Check (input URL)
                               ↓
                         Fetch Metadata (KV Cache → Facebook)
                               ↓
