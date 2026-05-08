@@ -4,8 +4,17 @@ import { fetchMetadata } from "./metadata.js";
 import { generateHtmlWithMetadata } from "./html.js";
 import { sendTelegramLog } from "./telegram/logger.js";
 
+function getClientIp(request) {
+  // Get client IP from CF header, then X-real-ip, then fallback to "unknown"
+  return (
+    request.headers.get("cf-connecting-ip") ||
+    request.headers.get("x-real-ip") ||
+    "unknown"
+  );
+}
+
 export async function handleLinkRequest(request, env, executionCtx, facebookUrl) {
-  const visitorIp = request.headers.get("cf-connecting-ip") || "unknown";
+  const visitorIp = getClientIp(request);
   const timestamp = new Date().toISOString();
 
   // Phase 1: Check blocklist against input URL

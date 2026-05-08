@@ -12,6 +12,8 @@ export default {
     const pathname = url.pathname;
     const matched = matchRoute(pathname);
 
+    console.log(`Matched: ${matched.route} for path: ${pathname}`);
+
     switch (matched.route) {
       case "favicon":
         return new Response(null, { status: 404 });
@@ -53,7 +55,14 @@ export default {
         if (!isValidParam(matched.id)) {
           return jsonResponse({ error: "Invalid parameters" }, 400);
         }
-        const fbUrl = `https://www.facebook.com/share/${matched.id}`;
+        const matchedId = matched.id;
+        // If the ID doesn't look like a share ID (rule: 10 chars random string)
+        // then drop the request to avoid unnecessary processing (e.g. robots.txt, sitemap.xml, .well-known)
+        if (!/^[a-zA-Z0-9_-]{10}$/.test(matchedId)) {
+          return new Response("Not Found", { status: 404 });
+        }
+
+        const fbUrl = `https://www.facebook.com/share/${matchedId}`;
         return handleLinkRequest(request, env, ctx, fbUrl);
       }
 
